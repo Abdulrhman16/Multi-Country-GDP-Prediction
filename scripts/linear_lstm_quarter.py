@@ -151,65 +151,74 @@ def get_linear_res(train_data, test_data, train_targets, test_targets):
     return train_res, test_res
 
 
-
-res_list = []
-for file_item in os.listdir('dataset'):
-    if ('LSTM_data_' in file_item):
+def run(config, seed=1, dataset_path='dataset', output_file='linear_lstm_q_res.csv'):
+    """Run linear LSTM quarter baseline with provided config."""
+    res_list = []
+    for file_item in os.listdir(dataset_path):
+        if 'LSTM_data_' not in file_item:
+            continue
         print(file_item)
-    else:
-        continue
-# for file_item in ['MLP_data_q_95-19.pt']:
-    temp_dict = {}
-    start_time = time.time()
-    data_path = 'dataset/' + file_item
-    label_path = 'dataset/' + file_item.replace('LSTM_data', 'LSTM_label')
-    
-    set_seed(1)
-    data = torch.load(data_path)
-    labels = torch.load(label_path)
-    
-    data, labels, min_value, max_value = norm_lstm_tensor(data, labels, 'quarter')
-
-    # 13-19 use 2019 as test dataset, other use 2018-2019 as test dataset
-    if '13-19' in file_item:
-        year = 2019
-    else:
-        year = 2018
+        temp_dict = {}
+        start_time = time.time()
+        data_path = os.path.join(dataset_path, file_item)
+        label_path = os.path.join(dataset_path, file_item.replace('LSTM_data', 'LSTM_label'))
         
-    train_data, test_data, train_targets, test_targets = split_lstm_dataset_by_year(data, labels, year, freq='quarter')
+        set_seed(seed)
+        data = torch.load(data_path)
+        labels = torch.load(label_path)
+        
+        data, labels, min_value, max_value = norm_lstm_tensor(data, labels, 'quarter')
 
-    # flatten data
-    train_data = train_data.view(train_data.size()[0], -1)
-    test_data = test_data.view(test_data.size()[0], -1)
-    
-    # print(train_data.size())
-    # print(train_targets.size())
-    # break
-    train_res, test_res = get_linear_res(train_data, test_data, train_targets, test_targets)
+        # 13-19 use 2019 as test dataset, other use 2018-2019 as test dataset
+        if '13-19' in file_item:
+            year = 2019
+        else:
+            year = 2018
+            
+        train_data, test_data, train_targets, test_targets = split_lstm_dataset_by_year(data, labels, year, freq='quarter')
 
-    temp_dict['data'] = file_item
-    temp_dict['train_mae'] = train_res[0]
-    temp_dict['train_mse'] = train_res[1]
-    temp_dict['train_rmse'] = train_res[2]
-    temp_dict['train_mape'] = train_res[3]
-    temp_dict['train_mspe'] = train_res[4]
-    temp_dict['train_rse'] = train_res[5]
-    temp_dict['train_corr'] = train_res[6]
+        # flatten data
+        train_data = train_data.view(train_data.size()[0], -1)
+        test_data = test_data.view(test_data.size()[0], -1)
+        
+        train_res, test_res = get_linear_res(train_data, test_data, train_targets, test_targets)
+
+        temp_dict['data'] = file_item
+        temp_dict['train_mae'] = train_res[0]
+        temp_dict['train_mse'] = train_res[1]
+        temp_dict['train_rmse'] = train_res[2]
+        temp_dict['train_mape'] = train_res[3]
+        temp_dict['train_mspe'] = train_res[4]
+        temp_dict['train_rse'] = train_res[5]
+        temp_dict['train_corr'] = train_res[6]
+
+        temp_dict['test_mae'] = test_res[0]
+        temp_dict['test_mse'] = test_res[1]
+        temp_dict['test_rmse'] = test_res[2]
+        temp_dict['test_mape'] = test_res[3]
+        temp_dict['test_mspe'] = test_res[4]
+        temp_dict['test_rse'] = test_res[5]
+        temp_dict['test_corr'] = test_res[6]
+
+        res_list.append(temp_dict)
+        print('cost time: ', time.time() - start_time)
+
+    df_res = pd.DataFrame(res_list)
+    print(df_res)
+    df_res.to_csv(output_file)
+    return df_res
 
 
-    temp_dict['test_mae'] = test_res[0]
-    temp_dict['test_mse'] = test_res[1]
-    temp_dict['test_rmse'] = test_res[2]
-    temp_dict['test_mape'] = test_res[3]
-    temp_dict['test_mspe'] = test_res[4]
-    temp_dict['test_rse'] = test_res[5]
-    temp_dict['test_corr'] = test_res[6]
+def _main():
+    """Run when executed as a script."""
+    config = {
+        'dataset_path': 'dataset',
+        'output_file': 'linear_lstm_q_res.csv',
+    }
+    run(config, seed=1)
 
-    res_list.append(temp_dict)
-    print('cost time: ', time.time() - start_time)
 
-df_res = pd.DataFrame(res_list)
-print(df_res)
-df_res.to_csv('linear_lstm_q_res.csv')
+if __name__ == '__main__':
+    _main()
 
 

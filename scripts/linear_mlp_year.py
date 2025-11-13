@@ -125,64 +125,74 @@ def get_linear_res(train_data, test_data, train_targets, test_targets):
     return train_res, test_res
 
 
-
-res_list = []
-for file_item in os.listdir('dataset'):
-    if ('MLP_data_' in file_item) and ('_y_' in file_item):
+def run(config, seed=1, dataset_path='dataset', output_file='linear_mlp_y_res.csv'):
+    """Run linear MLP year baseline with provided config."""
+    res_list = []
+    for file_item in os.listdir(dataset_path):
+        if not ('MLP_data_' in file_item and '_y_' in file_item):
+            continue
         print(file_item)
-    else:
-        continue
-# for file_item in ['MLP_data_q_95-19.pt']:
-    temp_dict = {}
-    start_time = time.time()
-    data_path = 'dataset/' + file_item
-    label_path = 'dataset/' + file_item.replace('MLP_data', 'MLP_label')
-    
+        temp_dict = {}
+        start_time = time.time()
+        data_path = os.path.join(dataset_path, file_item)
+        label_path = os.path.join(dataset_path, file_item.replace('MLP_data', 'MLP_label'))
         
-    set_seed(1)
-    
-    data = torch.load(data_path)
-    labels = torch.load(label_path)
-    
-    data, _, _ = norm_mlp_tensor(data, 'year')
-    labels, min_value, max_value = norm_mlp_tensor(labels,'year')
-    
-    # 13-19 use last year as test dataset, other use last two years as test dataset
-    if  '-07' in file_item:
-        year = 2006
-    else:
-        if '13-19' in file_item:
-            year = 2019
+        set_seed(seed)
+        data = torch.load(data_path)
+        labels = torch.load(label_path)
+        
+        data, _, _ = norm_mlp_tensor(data, 'year')
+        labels, min_value, max_value = norm_mlp_tensor(labels, 'year')
+        
+        # 13-19 use last year as test dataset, other use last two years as test dataset
+        if '-07' in file_item:
+            year = 2006
         else:
-            year = 2018
+            if '13-19' in file_item:
+                year = 2019
+            else:
+                year = 2018
+            
+        train_data, test_data, train_targets, test_targets = split_mlp_dataset_by_year(data, labels, year, freq='year')
         
-    train_data, test_data, train_targets, test_targets = split_mlp_dataset_by_year(data, labels, year, freq='year')
-    
-    train_res, test_res = get_linear_res(train_data, test_data, train_targets, test_targets)
+        train_res, test_res = get_linear_res(train_data, test_data, train_targets, test_targets)
 
-    temp_dict['data'] = file_item
-    temp_dict['train_mae'] = train_res[0]
-    temp_dict['train_mse'] = train_res[1]
-    temp_dict['train_rmse'] = train_res[2]
-    temp_dict['train_mape'] = train_res[3]
-    temp_dict['train_mspe'] = train_res[4]
-    temp_dict['train_rse'] = train_res[5]
-    temp_dict['train_corr'] = train_res[6]
+        temp_dict['data'] = file_item
+        temp_dict['train_mae'] = train_res[0]
+        temp_dict['train_mse'] = train_res[1]
+        temp_dict['train_rmse'] = train_res[2]
+        temp_dict['train_mape'] = train_res[3]
+        temp_dict['train_mspe'] = train_res[4]
+        temp_dict['train_rse'] = train_res[5]
+        temp_dict['train_corr'] = train_res[6]
+
+        temp_dict['test_mae'] = test_res[0]
+        temp_dict['test_mse'] = test_res[1]
+        temp_dict['test_rmse'] = test_res[2]
+        temp_dict['test_mape'] = test_res[3]
+        temp_dict['test_mspe'] = test_res[4]
+        temp_dict['test_rse'] = test_res[5]
+        temp_dict['test_corr'] = test_res[6]
+
+        res_list.append(temp_dict)
+        print('cost time: ', time.time() - start_time)
+
+    df_res = pd.DataFrame(res_list)
+    print(df_res)
+    df_res.to_csv(output_file)
+    return df_res
 
 
-    temp_dict['test_mae'] = test_res[0]
-    temp_dict['test_mse'] = test_res[1]
-    temp_dict['test_rmse'] = test_res[2]
-    temp_dict['test_mape'] = test_res[3]
-    temp_dict['test_mspe'] = test_res[4]
-    temp_dict['test_rse'] = test_res[5]
-    temp_dict['test_corr'] = test_res[6]
+def _main():
+    """Run when executed as a script."""
+    config = {
+        'dataset_path': 'dataset',
+        'output_file': 'linear_mlp_y_res.csv',
+    }
+    run(config, seed=1)
 
-    res_list.append(temp_dict)
-    print('cost time: ', time.time() - start_time)
 
-df_res = pd.DataFrame(res_list)
-print(df_res)
-df_res.to_csv('linear_mlp_y_res.csv')
+if __name__ == '__main__':
+    _main()
 
 
