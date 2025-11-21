@@ -1,0 +1,12 @@
+{"time":"2025-11-21T12:13:23.3464585+03:00","level":"INFO","msg":"stream: starting","core version":"0.23.0"}
+{"time":"2025-11-21T12:13:24.3145349+03:00","level":"INFO","msg":"stream: created new stream","id":"tivff30s"}
+{"time":"2025-11-21T12:13:24.3145349+03:00","level":"INFO","msg":"handler: started","stream_id":"tivff30s"}
+{"time":"2025-11-21T12:13:24.3230337+03:00","level":"INFO","msg":"stream: started","id":"tivff30s"}
+{"time":"2025-11-21T12:13:24.3230337+03:00","level":"INFO","msg":"writer: started","stream_id":"tivff30s"}
+{"time":"2025-11-21T12:13:24.3230337+03:00","level":"INFO","msg":"sender: started","stream_id":"tivff30s"}
+{"time":"2025-11-21T12:14:05.431818+03:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-11-21T12:14:05.9723589+03:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-11-21T12:14:05.9793652+03:00","level":"INFO","msg":"stream: closing","id":"tivff30s"}
+{"time":"2025-11-21T12:14:05.9793652+03:00","level":"INFO","msg":"handler: closed","stream_id":"tivff30s"}
+{"time":"2025-11-21T12:14:05.9798654+03:00","level":"INFO","msg":"sender: closed","stream_id":"tivff30s"}
+{"time":"2025-11-21T12:14:05.9798654+03:00","level":"INFO","msg":"stream: closed","id":"tivff30s"}

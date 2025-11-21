@@ -14,7 +14,39 @@ from sklearn.metrics import mean_squared_error
 from tqdm import tqdm  # 进度条显示
 import time
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2,3,4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4"
+
+# Import dataset utilities for CSV loading
+try:
+    from dataset_utils import load_dataset_from_csv_or_pt
+except ImportError:
+    # Fallback if import fails
+    def load_dataset_from_csv_or_pt(data_path, label_path=None, dataset_type="auto"):
+        # Try CSV first
+        csv_path = data_path.replace(".pt", ".csv")
+        if os.path.exists(csv_path):
+            import pandas as pd
+            df = pd.read_csv(csv_path)
+            if dataset_type == "lstm" or "LSTM" in csv_path:
+                time_length = int(df['time_length'].iloc[0])
+                n_features = int(df['n_features'].iloc[0])
+                feature_cols = [col for col in df.columns if col.startswith('t')]
+                data_flat = df[feature_cols].values
+                data = data_flat.reshape(len(df), time_length, n_features)
+                labels = df['target_GDP'].values.reshape(len(df), 1)
+            else:
+                feature_cols = [col for col in df.columns if col.startswith('feature_')]
+                label_cols = [col for col in df.columns if col.startswith('target_')]
+                data = df[feature_cols].values
+                labels = df[label_cols].values
+            return torch.tensor(data, dtype=torch.float32), torch.tensor(labels, dtype=torch.float32)
+        # Fallback to .pt
+        if label_path is None:
+            if "LSTM_data" in data_path:
+                label_path = data_path.replace("LSTM_data", "LSTM_label")
+            elif "MLP_data" in data_path:
+                label_path = data_path.replace("MLP_data", "MLP_label")
+        return torch.load(data_path), torch.load(label_path)
 
 
 def set_seed(seed):
@@ -28,12 +60,12 @@ def set_seed(seed):
 
 
 # 计算最小值和最大值, 并进行归一化
-def norm_lstm_tensor(data, labels, freq='quarter'):
-    if freq == 'quarter':
+def norm_lstm_tensor(data, labels, freq="quarter"):
+    if freq == "quarter":
         drop_index = -3
     else:
         drop_index = -2
-    
+
     # 将最后一维的数据分开
     data_to_norm = data[:, :, :drop_index]  # 除了最后一个维度
     labels_to_norm = labels[:, :drop_index]  # 除了最后一个维度
@@ -41,7 +73,7 @@ def norm_lstm_tensor(data, labels, freq='quarter'):
     # 计算data的最小值和最大值
     max_vals_data, _ = torch.max(data_to_norm, dim=0)  # 对第一个维度求最大值
     max_vals_data, _ = torch.max(max_vals_data, dim=0)  # 再对第二个维度求最大值
-    
+
     min_vals_data, _ = torch.min(data_to_norm, dim=0)  # 对第一个维度求最小值
     min_vals_data, _ = torch.min(min_vals_data, dim=0)  # 再对第二个维度求最小值
 
@@ -57,24 +89,32 @@ def norm_lstm_tensor(data, labels, freq='quarter'):
 
     # 计算 Min-Max 归一化
     # 对 data (去除最后一个维度的部分) 进行 Min-Max 归一化
-    normalized_data_to_norm = (data_to_norm - min_value_all) / (max_value_all - min_value_all)
+    normalized_data_to_norm = (data_to_norm - min_value_all) / (
+        max_value_all - min_value_all
+    )
 
     # 对 label (去除最后一个维度的部分) 进行 Min-Max 归一化
-    normalized_labels_to_norm = (labels_to_norm - min_value_all) / (max_value_all - min_value_all)
+    normalized_labels_to_norm = (labels_to_norm - min_value_all) / (
+        max_value_all - min_value_all
+    )
 
     # 重新拼接保留的最后一个维度
-    normalized_data = torch.cat([normalized_data_to_norm, data[:, :, drop_index:]], dim=2)
-    normalized_label = torch.cat([normalized_labels_to_norm, labels[:, drop_index:]], dim=1)
-    
+    normalized_data = torch.cat(
+        [normalized_data_to_norm, data[:, :, drop_index:]], dim=2
+    )
+    normalized_label = torch.cat(
+        [normalized_labels_to_norm, labels[:, drop_index:]], dim=1
+    )
+
     return normalized_data, normalized_label, min_value, max_value
 
 
-def split_lstm_dataset_by_year(data, labels, year, freq='quarter'):
-    if freq == 'quarter':
+def split_lstm_dataset_by_year(data, labels, year, freq="quarter"):
+    if freq == "quarter":
         dim_index = -2
     else:
         dim_index = -1
-        
+
     train_index_list = []
     test_index_list = []
     for i in range(len(labels)):
@@ -83,12 +123,11 @@ def split_lstm_dataset_by_year(data, labels, year, freq='quarter'):
         else:
             train_index_list.append(i)
 
+    train_data = data[train_index_list, :, : dim_index - 1]
+    train_targets = labels[train_index_list, : dim_index - 1]
 
-    train_data = data[train_index_list, :, :dim_index-1]
-    train_targets = labels[train_index_list, :dim_index-1]
-    
-    test_data = data[test_index_list, :, :dim_index-1]
-    test_targets = labels[test_index_list, :dim_index-1]
+    test_data = data[test_index_list, :, : dim_index - 1]
+    test_targets = labels[test_index_list, : dim_index - 1]
     return train_data, test_data, train_targets, test_targets
 
 
@@ -114,13 +153,12 @@ def get_linear_res(train_data, test_data, train_targets, test_targets):
 
     X_test = test_data
     y_test = test_targets
-    
+
     # 创建线性回归模型
     model = LinearRegression()
-    
+
     # 训练模型
     model.fit(X_train, y_train)
-
 
     # 进行预测
     y_pred_train = model.predict(X_train)[:, -1]
@@ -137,71 +175,79 @@ def get_linear_res(train_data, test_data, train_targets, test_targets):
     # 评估模型
     mse_train = mean_squared_error(y_train, y_pred_train)
     mse_test = mean_squared_error(y_test, y_pred_test)
-    
-    mae, mse, rmse, mape, mspe, rse, corr = metric(torch.Tensor(y_train),
-                                                   torch.Tensor(y_pred_train))
+
+    mae, mse, rmse, mape, mspe, rse, corr = metric(
+        torch.Tensor(y_train), torch.Tensor(y_pred_train)
+    )
 
     train_res = [x.item() for x in [mae, mse, rmse, mape, mspe, rse, corr]]
-    
-    mae, mse, rmse, mape, mspe, rse, corr = metric(torch.Tensor(y_test), 
-                                                   torch.Tensor(y_pred_test))
+
+    mae, mse, rmse, mape, mspe, rse, corr = metric(
+        torch.Tensor(y_test), torch.Tensor(y_pred_test)
+    )
 
     test_res = [x.item() for x in [mae, mse, rmse, mape, mspe, rse, corr]]
 
     return train_res, test_res
 
 
-def run(config, seed=1, dataset_path='dataset', output_file='linear_lstm_q_res.csv'):
+def run(config, seed=1, dataset_path="dataset", output_file="linear_lstm_q_res.csv"):
     """Run linear LSTM quarter baseline with provided config."""
     res_list = []
     for file_item in os.listdir(dataset_path):
-        if 'LSTM_data_' not in file_item:
+        if "LSTM_data_" not in file_item:
             continue
         print(file_item)
         temp_dict = {}
         start_time = time.time()
         data_path = os.path.join(dataset_path, file_item)
-        label_path = os.path.join(dataset_path, file_item.replace('LSTM_data', 'LSTM_label'))
-        
+        label_path = os.path.join(
+            dataset_path, file_item.replace("LSTM_data", "LSTM_label")
+        )
+
         set_seed(seed)
-        data = torch.load(data_path)
-        labels = torch.load(label_path)
-        
-        data, labels, min_value, max_value = norm_lstm_tensor(data, labels, 'quarter')
+        # Load from CSV (preferred) or .pt files
+        data, labels = load_dataset_from_csv_or_pt(data_path, label_path, dataset_type="lstm")
+
+        data, labels, min_value, max_value = norm_lstm_tensor(data, labels, "quarter")
 
         # 13-19 use 2019 as test dataset, other use 2018-2019 as test dataset
-        if '13-19' in file_item:
+        if "13-19" in file_item:
             year = 2019
         else:
             year = 2018
-            
-        train_data, test_data, train_targets, test_targets = split_lstm_dataset_by_year(data, labels, year, freq='quarter')
+
+        train_data, test_data, train_targets, test_targets = split_lstm_dataset_by_year(
+            data, labels, year, freq="quarter"
+        )
 
         # flatten data
         train_data = train_data.view(train_data.size()[0], -1)
         test_data = test_data.view(test_data.size()[0], -1)
-        
-        train_res, test_res = get_linear_res(train_data, test_data, train_targets, test_targets)
 
-        temp_dict['data'] = file_item
-        temp_dict['train_mae'] = train_res[0]
-        temp_dict['train_mse'] = train_res[1]
-        temp_dict['train_rmse'] = train_res[2]
-        temp_dict['train_mape'] = train_res[3]
-        temp_dict['train_mspe'] = train_res[4]
-        temp_dict['train_rse'] = train_res[5]
-        temp_dict['train_corr'] = train_res[6]
+        train_res, test_res = get_linear_res(
+            train_data, test_data, train_targets, test_targets
+        )
 
-        temp_dict['test_mae'] = test_res[0]
-        temp_dict['test_mse'] = test_res[1]
-        temp_dict['test_rmse'] = test_res[2]
-        temp_dict['test_mape'] = test_res[3]
-        temp_dict['test_mspe'] = test_res[4]
-        temp_dict['test_rse'] = test_res[5]
-        temp_dict['test_corr'] = test_res[6]
+        temp_dict["data"] = file_item
+        temp_dict["train_mae"] = train_res[0]
+        temp_dict["train_mse"] = train_res[1]
+        temp_dict["train_rmse"] = train_res[2]
+        temp_dict["train_mape"] = train_res[3]
+        temp_dict["train_mspe"] = train_res[4]
+        temp_dict["train_rse"] = train_res[5]
+        temp_dict["train_corr"] = train_res[6]
+
+        temp_dict["test_mae"] = test_res[0]
+        temp_dict["test_mse"] = test_res[1]
+        temp_dict["test_rmse"] = test_res[2]
+        temp_dict["test_mape"] = test_res[3]
+        temp_dict["test_mspe"] = test_res[4]
+        temp_dict["test_rse"] = test_res[5]
+        temp_dict["test_corr"] = test_res[6]
 
         res_list.append(temp_dict)
-        print('cost time: ', time.time() - start_time)
+        print("cost time: ", time.time() - start_time)
 
     df_res = pd.DataFrame(res_list)
     print(df_res)
@@ -212,13 +258,11 @@ def run(config, seed=1, dataset_path='dataset', output_file='linear_lstm_q_res.c
 def _main():
     """Run when executed as a script."""
     config = {
-        'dataset_path': 'dataset',
-        'output_file': 'linear_lstm_q_res.csv',
+        "dataset_path": "dataset",
+        "output_file": "linear_lstm_q_res.csv",
     }
     run(config, seed=1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _main()
-
-

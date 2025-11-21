@@ -1,0 +1,2 @@
+,hidden_dim,num_layers,dropout_rate,lr,batch_size,num_epochs,weight,weight_decay,record_best_epoch,record_best_val_gdp_loss,record_best_fold,best_overall_loss_average,final model mae,final model mse,final model rmse,final model mape,train_data shape,test_data shape,train_targets shape,test_targets shape
+0,512,2,0.1,0.001,64,1,60,0.01,1,0.015387127175927162,3,0.021326220780611038,tensor(8.7705),tensor(78.7662),tensor(8.8750),tensor(7.0897),"155, 12, 24","40, 12, 24","155, 1","40, 1"
